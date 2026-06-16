@@ -31,7 +31,10 @@ prepare_icon() {
   sips -z 512 512 "$ICON_SOURCE" --out "$iconset/icon_512x512.png" >/dev/null
   sips -z 1024 1024 "$ICON_SOURCE" --out "$iconset/icon_512x512@2x.png" >/dev/null
 
-  iconutil -c icns "$iconset" -o "$ICON_ICNS"
+  if ! iconutil -c icns "$iconset" -o "$ICON_ICNS"; then
+    echo "warning: iconutil rejected generated iconset, falling back to sips icns conversion" >&2
+    sips -s format icns "$ICON_SOURCE" --out "$ICON_ICNS" >/dev/null
+  fi
 }
 
 create_app() {

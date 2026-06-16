@@ -173,6 +173,8 @@ pub struct BackendSettings {
     pub codex_app_session_delete: bool,
     #[serde(rename = "codexAppMarkdownExport", default = "default_true")]
     pub codex_app_markdown_export: bool,
+    #[serde(rename = "codexAppWorkspaceMarkdownReader", default = "default_true")]
+    pub codex_app_workspace_markdown_reader: bool,
     #[serde(rename = "codexAppProjectMove", default = "default_true")]
     pub codex_app_project_move: bool,
     #[serde(rename = "codexAppConversationTimeline", default = "default_true")]
@@ -255,6 +257,7 @@ impl Default for BackendSettings {
             codex_app_model_whitelist_unlock: true,
             codex_app_session_delete: true,
             codex_app_markdown_export: true,
+            codex_app_workspace_markdown_reader: true,
             codex_app_project_move: true,
             codex_app_conversation_timeline: true,
             codex_app_conversation_view: false,
@@ -559,6 +562,7 @@ fn merge_known_setting_fields(target: &mut Map<String, Value>, source: &Map<Stri
     merge_bool_setting(target, source, "codexAppModelWhitelistUnlock");
     merge_bool_setting(target, source, "codexAppSessionDelete");
     merge_bool_setting(target, source, "codexAppMarkdownExport");
+    merge_bool_setting(target, source, "codexAppWorkspaceMarkdownReader");
     merge_bool_setting(target, source, "codexAppProjectMove");
     merge_bool_setting(target, source, "codexAppConversationTimeline");
     merge_bool_setting(target, source, "codexAppConversationView");
@@ -900,6 +904,7 @@ mod tests {
         assert!(settings.codex_app_plugin_entry_unlock);
         assert!(settings.codex_app_plugin_marketplace_unlock);
         assert!(settings.codex_app_force_plugin_install);
+        assert!(settings.codex_app_workspace_markdown_reader);
         assert!(!settings.codex_goals_enabled);
         assert!(settings.codex_app_path.is_empty());
         assert!(settings.codex_extra_args.is_empty());
@@ -962,6 +967,18 @@ mod tests {
         assert!(!legacy_settings.codex_app_plugin_entry_unlock);
         assert!(legacy_settings.codex_app_plugin_marketplace_unlock);
         assert!(!legacy_settings.codex_app_force_plugin_install);
+    }
+
+    #[test]
+    fn settings_deserialize_reads_workspace_markdown_reader_switch() {
+        let settings: BackendSettings =
+            serde_json::from_str(r#"{"codexAppWorkspaceMarkdownReader":false}"#).unwrap();
+
+        assert!(!settings.codex_app_workspace_markdown_reader);
+
+        let legacy_settings: BackendSettings = serde_json::from_str("{}").unwrap();
+
+        assert!(legacy_settings.codex_app_workspace_markdown_reader);
     }
 
     #[test]
@@ -1388,6 +1405,7 @@ experimental_bearer_token = "sk-existing""#
             "enhancementsEnabled": false,
             "codexAppPluginEntryUnlock": false,
             "codexAppSessionDelete": false,
+            "codexAppWorkspaceMarkdownReader": false,
             "codexAppConversationView": true,
             "codexAppServiceTierControls": true,
             "codexGoalsEnabled": true,
@@ -1404,6 +1422,7 @@ experimental_bearer_token = "sk-existing""#
         assert!(!updated.enhancements_enabled);
         assert!(!updated.codex_app_plugin_entry_unlock);
         assert!(!updated.codex_app_session_delete);
+        assert!(!updated.codex_app_workspace_markdown_reader);
         assert!(updated.codex_app_conversation_view);
         assert!(updated.codex_app_service_tier_controls);
         assert!(updated.codex_goals_enabled);

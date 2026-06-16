@@ -51,6 +51,8 @@
   const codexArchiveDeleteAllVersion = "2";
   const codexConversationTimelineVersion = "2";
   const codexConversationViewVersion = "1";
+  const workspaceMarkdownReaderVersion = "1";
+  const workspaceMarkdownReaderStyleId = "codex-md-reader-style";
   const codexThreadScrollVersion = "1";
   const codexThreadServiceTierVersion = "1";
   const codexServiceTierBadgeClass = "codex-service-tier-badge";
@@ -931,7 +933,7 @@
   }
 
   function defaultCodexPlusSettings() {
-    return { pluginEntryUnlock: true, pluginMarketplaceUnlock: true, forcePluginInstall: true, modelWhitelistUnlock: true, sessionDelete: true, markdownExport: true, projectMove: true, conversationTimeline: true, conversationView: false, conversationViewMaxWidth: conversationViewDefaultWidth, threadScrollRestore: true, zedRemoteOpen: true, upstreamWorktreeCreate: true, nativeMenuPlacement: true, serviceTierControls: false };
+    return { pluginEntryUnlock: true, pluginMarketplaceUnlock: true, forcePluginInstall: true, modelWhitelistUnlock: true, sessionDelete: true, markdownExport: true, workspaceMarkdownReader: true, projectMove: true, conversationTimeline: true, conversationView: false, conversationViewMaxWidth: conversationViewDefaultWidth, threadScrollRestore: true, zedRemoteOpen: true, upstreamWorktreeCreate: true, nativeMenuPlacement: true, serviceTierControls: false };
   }
 
   const codexPlusBackendSettingMap = {
@@ -941,6 +943,7 @@
     modelWhitelistUnlock: "codexAppModelWhitelistUnlock",
     sessionDelete: "codexAppSessionDelete",
     markdownExport: "codexAppMarkdownExport",
+    workspaceMarkdownReader: "codexAppWorkspaceMarkdownReader",
     projectMove: "codexAppProjectMove",
     conversationTimeline: "codexAppConversationTimeline",
     conversationView: "codexAppConversationView",
@@ -971,6 +974,7 @@
         modelWhitelistUnlock: false,
         sessionDelete: false,
         markdownExport: false,
+        workspaceMarkdownReader: false,
         projectMove: false,
         conversationTimeline: false,
         conversationView: false,
@@ -1033,6 +1037,9 @@
         removeCodexServiceTierBadges();
         refreshCodexServiceTierControls();
       }
+    }
+    if (key === "workspaceMarkdownReader" && !value) {
+      cleanupWorkspaceMarkdownReader();
     }
     renderCodexPlusMenu();
     scan();
@@ -2188,6 +2195,10 @@
             <div class="codex-plus-row">
               <div><div class="codex-plus-row-title">Markdown 导出</div><div class="codex-plus-row-description">在会话列表显示导出按钮，按本地 rollout 导出带时间戳的 Markdown。</div></div>
               <button type="button" class="codex-plus-toggle" data-codex-plus-setting="markdownExport"><span></span></button>
+            </div>
+            <div class="codex-plus-row">
+              <div><div class="codex-plus-row-title">Workspace Markdown Reader</div><div class="codex-plus-row-description">增强工作区 Markdown 预览样式，并允许把选区加入当前 chat composer。</div></div>
+              <button type="button" class="codex-plus-toggle" data-codex-plus-setting="workspaceMarkdownReader"><span></span></button>
             </div>
             <div class="codex-plus-row">
               <div><div class="codex-plus-row-title">会话项目移动</div><div class="codex-plus-row-description">在会话列表悬停显示移动按钮，可移动到普通对话或其他本地项目。</div></div>
@@ -5157,6 +5168,510 @@
     setTimeout(() => toast.remove(), 10000);
   }
 
+  function installWorkspaceMarkdownReaderStyle() {
+    const existing = document.getElementById(workspaceMarkdownReaderStyleId);
+    if (!codexPlusSettings().workspaceMarkdownReader) {
+      existing?.remove();
+      return;
+    }
+    if (existing?.dataset.codexMdReaderVersion === workspaceMarkdownReaderVersion) return;
+    existing?.remove();
+    const style = document.createElement("style");
+    style.id = workspaceMarkdownReaderStyleId;
+    style.dataset.codexMdReaderVersion = workspaceMarkdownReaderVersion;
+    style.textContent = `
+      [data-codex-md-reader="true"] {
+        --codex-md-reader-border: color-mix(in srgb, currentColor 16%, transparent);
+        --codex-md-reader-soft: color-mix(in srgb, currentColor 6%, transparent);
+        --codex-md-reader-accent: #10a37f;
+        --codex-md-reader-warning: #d97706;
+        color: inherit;
+        font-size: 15px;
+        line-height: 1.72;
+        overflow-wrap: anywhere;
+      }
+      [data-codex-md-reader="true"] h1,
+      [data-codex-md-reader="true"] h2,
+      [data-codex-md-reader="true"] h3,
+      [data-codex-md-reader="true"] h4 {
+        line-height: 1.25;
+        letter-spacing: 0;
+        scroll-margin-top: 72px;
+      }
+      [data-codex-md-reader="true"] h1 {
+        font-size: 1.7rem;
+        margin: 0.2rem 0 1.1rem;
+      }
+      [data-codex-md-reader="true"] h2 {
+        font-size: 1.32rem;
+        margin: 2rem 0 0.8rem;
+        padding-bottom: 0.36rem;
+        border-bottom: 1px solid var(--codex-md-reader-border);
+      }
+      [data-codex-md-reader="true"] h3 {
+        font-size: 1.12rem;
+        margin: 1.45rem 0 0.55rem;
+      }
+      [data-codex-md-reader="true"] h4 {
+        font-size: 1rem;
+        margin: 1.2rem 0 0.45rem;
+      }
+      [data-codex-md-reader="true"] p {
+        margin: 0.72rem 0;
+      }
+      [data-codex-md-reader="true"] ul,
+      [data-codex-md-reader="true"] ol {
+        margin: 0.72rem 0 0.95rem;
+        padding-inline-start: 1.45rem;
+      }
+      [data-codex-md-reader="true"] li {
+        margin: 0.22rem 0;
+      }
+      [data-codex-md-reader="true"] blockquote {
+        margin: 1rem 0;
+        border-left: 4px solid var(--codex-md-reader-accent);
+        border-radius: 0 8px 8px 0;
+        background: color-mix(in srgb, var(--codex-md-reader-accent) 8%, transparent);
+        padding: 0.7rem 0.9rem;
+      }
+      [data-codex-md-reader="true"] blockquote > :first-child {
+        margin-top: 0;
+      }
+      [data-codex-md-reader="true"] blockquote > :last-child {
+        margin-bottom: 0;
+      }
+      [data-codex-md-reader="true"] table {
+        width: max-content;
+        min-width: 100%;
+        border-collapse: collapse;
+        margin: 1rem 0;
+      }
+      [data-codex-md-reader="true"] table th,
+      [data-codex-md-reader="true"] table td {
+        border: 1px solid var(--codex-md-reader-border);
+        padding: 0.52rem 0.68rem;
+        vertical-align: top;
+      }
+      [data-codex-md-reader="true"] table th {
+        background: var(--codex-md-reader-soft);
+        font-weight: 650;
+      }
+      [data-codex-md-reader="true"] :has(> table) {
+        overflow-x: auto;
+      }
+      [data-codex-md-reader="true"] pre {
+        border: 1px solid var(--codex-md-reader-border);
+        border-radius: 8px;
+        background: color-mix(in srgb, currentColor 5%, transparent);
+        padding: 0.9rem 1rem;
+        overflow-x: auto;
+        line-height: 1.55;
+      }
+      [data-codex-md-reader="true"] code {
+        border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+        border-radius: 5px;
+        background: color-mix(in srgb, currentColor 7%, transparent);
+        padding: 0.1rem 0.3rem;
+      }
+      [data-codex-md-reader="true"] pre code {
+        border: 0;
+        background: transparent;
+        padding: 0;
+        white-space: pre;
+      }
+      [data-codex-md-reader="true"] img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 8px;
+      }
+      [data-codex-md-reader="true"] details {
+        margin: 1rem 0;
+        border: 1px solid var(--codex-md-reader-border);
+        border-radius: 8px;
+        background: color-mix(in srgb, currentColor 4%, transparent);
+        padding: 0.72rem 0.9rem;
+      }
+      [data-codex-md-reader="true"] summary {
+        cursor: pointer;
+        font-weight: 650;
+      }
+      .codex-md-selection-toolbar {
+        position: fixed;
+        z-index: 2147483202;
+        display: inline-flex;
+        gap: 4px;
+        align-items: center;
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 8px;
+        background: #242628;
+        color: #f4f4f5;
+        box-shadow: 0 14px 40px rgba(0,0,0,.28);
+        padding: 4px;
+        font: 12px/16px system-ui, sans-serif;
+      }
+      .codex-md-selection-toolbar[hidden] {
+        display: none !important;
+      }
+      .codex-md-selection-toolbar button {
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+        font: inherit;
+        padding: 5px 7px;
+      }
+      .codex-md-selection-toolbar button:hover,
+      .codex-md-selection-toolbar button:focus-visible {
+        background: rgba(255,255,255,.1);
+        outline: none;
+      }
+    `;
+    document.documentElement.appendChild(style);
+  }
+
+  function workspaceMarkdownSurfaceScore(surface) {
+    if (!(surface instanceof HTMLElement) || isExtensionUiNode(surface)) return 0;
+    if (surface.closest("[data-message-author-role], [data-testid='conversation-turn']")) return 0;
+    let score = 0;
+    if (surface.matches("[data-wide-markdown-block]")) score += 4;
+    if (surface.classList.contains("text-size-chat")) score += 3;
+    if (surface.querySelector("[data-markdown-copy]")) score += 3;
+    if (surface.querySelector("h1,h2,h3,h4,h5,h6")) score += 3;
+    if (surface.querySelector("table,blockquote,pre,details,summary")) score += 2;
+    if ((surface.textContent || "").trim().length > 80) score += 1;
+    if (!surface.querySelector("p,ul,ol,h1,h2,h3,h4,h5,h6,table,blockquote,pre,details")) score = 0;
+    return score;
+  }
+
+  function findWorkspaceMarkdownSurfaces() {
+    const candidates = new Set();
+    document.querySelectorAll("[data-wide-markdown-block], .text-size-chat, [data-markdown-copy]").forEach((node) => {
+      if (!(node instanceof HTMLElement) || isExtensionUiNode(node)) return;
+      const surface = node.closest("[data-wide-markdown-block]") || node.closest(".text-size-chat") || node;
+      if (surface instanceof HTMLElement && workspaceMarkdownSurfaceScore(surface) >= 5) {
+        candidates.add(surface);
+      }
+    });
+    return Array.from(candidates).filter((surface, _, all) => {
+      return !all.some((other) => other !== surface && other.contains(surface) && workspaceMarkdownSurfaceScore(other) >= workspaceMarkdownSurfaceScore(surface));
+    });
+  }
+
+  function cleanupWorkspaceMarkdownReader() {
+    document.getElementById(workspaceMarkdownReaderStyleId)?.remove();
+    document.querySelectorAll('[data-codex-md-reader="true"]').forEach((node) => {
+      delete node.dataset.codexMdReader;
+      delete node.dataset.codexMdReaderVersion;
+    });
+    document.querySelectorAll(".codex-md-selection-toolbar").forEach((node) => node.remove());
+  }
+
+  function markdownReaderFilePath(surface) {
+    const keys = ["itemPath", "filePath", "path", "codexFilePath", "remotePath"];
+    for (let node = surface; node && node !== document.body; node = node.parentElement) {
+      for (const key of keys) {
+        const value = node.dataset?.[key];
+        if (value && /\.(md|markdown)$/i.test(value)) return value;
+      }
+    }
+    const activeFile = Array.from(document.querySelectorAll('[data-item-type="file"][data-item-path], [data-file-path], [data-path]'))
+      .filter((node) => node instanceof HTMLElement && !isExtensionUiNode(node))
+      .find((node) => {
+        const value = node.dataset.itemPath || node.dataset.filePath || node.dataset.path || "";
+        if (!/\.(md|markdown)$/i.test(value)) return false;
+        return node.getAttribute("aria-selected") === "true" ||
+          node.getAttribute("aria-current") === "true" ||
+          node.dataset.selected === "true" ||
+          node.className.includes("selected") ||
+          node.className.includes("active");
+      });
+    const activePath = activeFile?.dataset?.itemPath || activeFile?.dataset?.filePath || activeFile?.dataset?.path || "";
+    return activePath || "未识别（当前 Markdown 预览）";
+  }
+
+  function markdownReaderHeadingForSelection(surface, range) {
+    const selectionRect = range.getBoundingClientRect?.();
+    const headings = Array.from(surface.querySelectorAll("h1,h2,h3,h4,h5,h6"));
+    let current = "";
+    headings.forEach((heading) => {
+      const text = (heading.textContent || "").replace(/\s+/g, " ").trim();
+      if (!text) return;
+      try {
+        if (selectionRect && heading.getBoundingClientRect().top <= selectionRect.top + 4) current = text;
+      } catch (_) {}
+    });
+    return current || "未识别";
+  }
+
+  function markdownReaderSelectionContext() {
+    const selection = document.getSelection?.();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
+    const text = selection.toString().trim();
+    if (!text) return null;
+    const anchor = selection.anchorNode?.nodeType === Node.ELEMENT_NODE ? selection.anchorNode : selection.anchorNode?.parentElement;
+    const focus = selection.focusNode?.nodeType === Node.ELEMENT_NODE ? selection.focusNode : selection.focusNode?.parentElement;
+    const surface = anchor?.closest?.('[data-codex-md-reader="true"]');
+    if (!surface || !focus || !surface.contains(focus)) return null;
+    const range = selection.getRangeAt(0);
+    return {
+      surface,
+      text,
+      filePath: markdownReaderFilePath(surface),
+      heading: markdownReaderHeadingForSelection(surface, range),
+      rect: range.getBoundingClientRect?.(),
+    };
+  }
+
+  function quoteMarkdownSelection(text) {
+    const bounded = String(text || "").trim().slice(0, 12000);
+    return bounded.split(/\r?\n/).map((line) => `> ${line}`).join("\n");
+  }
+
+  function markdownReaderPrompt(context, mode) {
+    const intro = mode === "ask-edit"
+      ? "请基于这个 Markdown 片段提出修改建议，并在我确认后修改原文件："
+      : "请基于这个 Markdown 片段修改原文件：";
+    return `${intro}
+
+文件：${context.filePath}
+章节：${context.heading}
+
+选中内容：
+${quoteMarkdownSelection(context.text)}
+
+我的修改要求：
+`;
+  }
+
+  function markdownReaderReference(context) {
+    return `文件：${context.filePath}
+章节：${context.heading}
+
+选中内容：
+${quoteMarkdownSelection(context.text)}
+`;
+  }
+
+  function editableText(node) {
+    if (node instanceof HTMLTextAreaElement || node instanceof HTMLInputElement) return node.value || "";
+    if (node?.isContentEditable) return node.innerText || node.textContent || "";
+    return "";
+  }
+
+  function composerWriterTargetCandidates() {
+    const active = document.activeElement;
+    const candidates = [];
+    if (active instanceof HTMLElement) candidates.push(active);
+    document.querySelectorAll(".composer-footer textarea, .composer-footer [contenteditable='true'], .composer-footer [contenteditable=''], textarea, [contenteditable='true'], [contenteditable='']").forEach((node) => {
+      if (node instanceof HTMLElement) candidates.push(node);
+    });
+    return Array.from(new Set(candidates)).filter((node) => {
+      if (isExtensionUiNode(node)) return false;
+      if (!(node instanceof HTMLTextAreaElement) && !(node instanceof HTMLInputElement) && !node.isContentEditable) return false;
+      return visibleElement(node) || node === document.activeElement;
+    });
+  }
+
+  function composerWriterFindTarget() {
+    return composerWriterTargetCandidates()
+      .sort((left, right) => {
+        const score = (node) => {
+          let value = 0;
+          if (node.closest?.(".composer-footer")) value += 8;
+          if (node === document.activeElement) value += 4;
+          if (node instanceof HTMLTextAreaElement) value += 2;
+          if ((editableText(node) || "").length > 0) value += 1;
+          return value;
+        };
+        return score(right) - score(left);
+      })[0] || null;
+  }
+
+  function setNativeInputValue(node, value) {
+    const prototype = Object.getPrototypeOf(node);
+    const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
+    if (descriptor?.set) {
+      descriptor.set.call(node, value);
+    } else {
+      node.value = value;
+    }
+  }
+
+  function composerWriterInsertText(text) {
+    const target = composerWriterFindTarget();
+    if (!target) return false;
+    const current = editableText(target);
+    const insertion = `${current.trim() ? "\n\n" : ""}${text}`;
+    target.focus?.();
+    if (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) {
+      const start = Number.isFinite(target.selectionStart) ? target.selectionStart : current.length;
+      const end = Number.isFinite(target.selectionEnd) ? target.selectionEnd : start;
+      const next = `${current.slice(0, start)}${insertion}${current.slice(end)}`;
+      setNativeInputValue(target, next);
+      const cursor = start + insertion.length;
+      target.setSelectionRange?.(cursor, cursor);
+    } else if (target.isContentEditable) {
+      const ok = document.execCommand?.("insertText", false, insertion);
+      if (!ok) {
+        target.textContent = `${current}${insertion}`;
+      }
+    }
+    target.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: insertion }));
+    target.dispatchEvent(new Event("change", { bubbles: true }));
+    const verification = editableText(target);
+    return verification.includes(String(text).trim().slice(0, 80));
+  }
+
+  async function copyTextToClipboard(text) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "true");
+    Object.assign(textarea.style, {
+      position: "fixed",
+      left: "-9999px",
+      top: "0",
+    });
+    document.body.appendChild(textarea);
+    textarea.select();
+    const ok = document.execCommand?.("copy");
+    textarea.remove();
+    return !!ok;
+  }
+
+  function hideMarkdownSelectionToolbar() {
+    const toolbar = document.querySelector(".codex-md-selection-toolbar");
+    if (toolbar) toolbar.hidden = true;
+    window.__codexMdSelectionContext = null;
+  }
+
+  function positionMarkdownSelectionToolbar(toolbar, rect) {
+    if (!rect || (!rect.width && !rect.height)) {
+      hideMarkdownSelectionToolbar();
+      return;
+    }
+    toolbar.hidden = false;
+    const toolbarRect = toolbar.getBoundingClientRect();
+    const top = Math.max(8, rect.top - toolbarRect.height - 8);
+    const left = Math.min(
+      window.innerWidth - toolbarRect.width - 8,
+      Math.max(8, rect.left + Math.min(rect.width / 2, 160) - toolbarRect.width / 2)
+    );
+    toolbar.style.top = `${Math.round(top)}px`;
+    toolbar.style.left = `${Math.round(left)}px`;
+  }
+
+  function updateMarkdownSelectionToolbar() {
+    if (!codexPlusSettings().workspaceMarkdownReader) {
+      hideMarkdownSelectionToolbar();
+      return;
+    }
+    const context = markdownReaderSelectionContext();
+    if (!context) {
+      hideMarkdownSelectionToolbar();
+      return;
+    }
+    const toolbar = installMarkdownSelectionToolbar();
+    window.__codexMdSelectionContext = context;
+    positionMarkdownSelectionToolbar(toolbar, context.rect);
+  }
+
+  async function handleMarkdownSelectionToolbarAction(action) {
+    const context = window.__codexMdSelectionContext || markdownReaderSelectionContext();
+    if (!context) {
+      hideMarkdownSelectionToolbar();
+      return;
+    }
+    if (action === "copy-ref") {
+      await copyTextToClipboard(markdownReaderReference(context));
+      showToast("Markdown 引用已复制", null);
+      hideMarkdownSelectionToolbar();
+      return;
+    }
+    const prompt = markdownReaderPrompt(context, action);
+    if (composerWriterInsertText(prompt)) {
+      showToast("已添加到 chat composer", null);
+    } else {
+      await copyTextToClipboard(prompt);
+      showToast("未找到输入框，已复制到剪贴板", null);
+    }
+    hideMarkdownSelectionToolbar();
+  }
+
+  function installMarkdownSelectionToolbar() {
+    let toolbar = document.querySelector(".codex-md-selection-toolbar");
+    if (!toolbar) {
+      toolbar = document.createElement("div");
+      toolbar.className = "codex-md-selection-toolbar";
+      toolbar.hidden = true;
+      toolbar.setAttribute("role", "toolbar");
+      toolbar.setAttribute("aria-label", "Markdown selection actions");
+      toolbar.innerHTML = `
+        <button type="button" data-codex-md-action="add">Add to chat</button>
+        <button type="button" data-codex-md-action="ask-edit">Ask edit</button>
+        <button type="button" data-codex-md-action="copy-ref">Copy ref</button>
+      `;
+      toolbar.addEventListener("mousedown", (event) => event.preventDefault(), true);
+      toolbar.addEventListener("click", (event) => {
+        const target = event.target instanceof Element ? event.target : event.target?.parentElement;
+        const button = target?.closest("[data-codex-md-action]");
+        if (!button) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void handleMarkdownSelectionToolbarAction(button.getAttribute("data-codex-md-action"));
+      }, true);
+      document.body.appendChild(toolbar);
+    }
+    if (window.__codexMdSelectionToolbarHandlers?.version !== workspaceMarkdownReaderVersion) {
+      const previous = window.__codexMdSelectionToolbarHandlers;
+      if (previous) {
+        document.removeEventListener("selectionchange", previous.selectionchange, true);
+        document.removeEventListener("mouseup", previous.mouseup, true);
+        document.removeEventListener("keyup", previous.keyup, true);
+        window.removeEventListener("scroll", previous.scroll, true);
+      }
+      const schedule = () => setTimeout(updateMarkdownSelectionToolbar, 0);
+      const handlers = {
+        version: workspaceMarkdownReaderVersion,
+        selectionchange: schedule,
+        mouseup: schedule,
+        keyup: schedule,
+        scroll: hideMarkdownSelectionToolbar,
+      };
+      document.addEventListener("selectionchange", handlers.selectionchange, true);
+      document.addEventListener("mouseup", handlers.mouseup, true);
+      document.addEventListener("keyup", handlers.keyup, true);
+      window.addEventListener("scroll", handlers.scroll, true);
+      window.__codexMdSelectionToolbarHandlers = handlers;
+    }
+    return toolbar;
+  }
+
+  function refreshWorkspaceMarkdownReader() {
+    if (!codexPlusSettings().workspaceMarkdownReader) {
+      cleanupWorkspaceMarkdownReader();
+      return;
+    }
+    installWorkspaceMarkdownReaderStyle();
+    installMarkdownSelectionToolbar();
+    const surfaces = findWorkspaceMarkdownSurfaces();
+    const surfaceSet = new Set(surfaces);
+    document.querySelectorAll('[data-codex-md-reader="true"]').forEach((node) => {
+      if (!surfaceSet.has(node)) {
+        delete node.dataset.codexMdReader;
+        delete node.dataset.codexMdReaderVersion;
+      }
+    });
+    surfaces.forEach((surface) => {
+      surface.dataset.codexMdReader = "true";
+      surface.dataset.codexMdReaderVersion = workspaceMarkdownReaderVersion;
+    });
+  }
+
   function upstreamWorktreeField(dialog, name) {
     return dialog.querySelector(`[data-codex-upstream-worktree-field="${name}"]`);
   }
@@ -7986,6 +8501,7 @@
     archivedPageRows().forEach(attachArchivedPageDeleteButton);
     refreshConversationTimeline();
     refreshConversationView();
+    refreshWorkspaceMarkdownReader();
     installCodexServiceTierBadge();
     scheduleThreadScrollSync();
     patchCodexModelWhitelist();
@@ -8006,7 +8522,7 @@
   }
 
   function isExtensionUiNode(node) {
-    return !!node?.closest?.(`.codex-delete-toast, .codex-delete-confirm-overlay, .codex-plus-modal-overlay, .${projectMoveOverlayClass}, .${timelineClass}, .codex-conversation-timeline, .${codexServiceTierBadgeClass}, .codex-zed-remote-button, .codex-zed-remote-toast, #codex-plus-menu`);
+    return !!node?.closest?.(`.codex-delete-toast, .codex-delete-confirm-overlay, .codex-plus-modal-overlay, .${projectMoveOverlayClass}, .${timelineClass}, .codex-conversation-timeline, .${codexServiceTierBadgeClass}, .codex-zed-remote-button, .codex-zed-remote-toast, .codex-md-selection-toolbar, #codex-plus-menu`);
   }
 
   function scanRelevantSelector() {
@@ -8022,6 +8538,10 @@
       '[class*="user-message"]',
       '[class*="UserMessage"]',
       ".composer-footer",
+      "[data-wide-markdown-block]",
+      "[data-markdown-copy]",
+      "[data-codex-md-reader]",
+      ".text-size-chat",
       selectors.appHeader,
       selectors.archiveNav,
       ...(pluginPatchDisabledInRelayMode() ? [] : [selectors.disabledInstallButton]),
