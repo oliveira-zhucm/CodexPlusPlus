@@ -7009,7 +7009,7 @@ ${quoteMarkdownSelection(context.text)}
 
   function attachButton(row) {
     const settings = codexPlusSettings();
-    if (!settings.sessionDelete && !settings.markdownExport && !settings.projectMove) {
+    if (!settings.markdownExport && !settings.projectMove) {
       removeActionGroups(row);
       row.dataset.codexDeleteRow = "false";
       row.dataset.codexProjectMoveRow = "false";
@@ -7021,15 +7021,13 @@ ${quoteMarkdownSelection(context.text)}
     const existingExportButton = existingGroup?.querySelector(`.${exportButtonClass}`);
     const existingMoveButton = existingGroup?.querySelector(`.${projectMoveButtonClass}`);
     const needsMoreMenu = settings.markdownExport || settings.projectMove;
-    const hasUnexpectedDelete = !settings.sessionDelete && !!existingDeleteButton;
+    const hasUnexpectedDelete = !!existingDeleteButton;
     const hasUnexpectedMore = !needsMoreMenu && !!existingMoreButton;
     const hasUnexpectedExport = !!existingExportButton;
     const hasUnexpectedMove = !!existingMoveButton;
-    const missingDelete = settings.sessionDelete && !existingDeleteButton;
     const missingMore = needsMoreMenu && !existingMoreButton;
-    const deleteReady = !settings.sessionDelete || existingDeleteButton?.dataset.codexDeleteVersion === codexDeleteVersion;
     const groupReady = existingGroup?.dataset.codexActionGroupVersion === codexActionGroupVersion;
-    if (groupReady && deleteReady && !hasUnexpectedDelete && !hasUnexpectedMore && !hasUnexpectedExport && !hasUnexpectedMove && !missingDelete && !missingMore) {
+    if (groupReady && !hasUnexpectedDelete && !hasUnexpectedMore && !hasUnexpectedExport && !hasUnexpectedMove && !missingMore) {
       syncActionGroupLayout(row, existingGroup);
       return;
     }
@@ -7083,17 +7081,6 @@ ${quoteMarkdownSelection(context.text)}
       moreMenu.__codexSessionMoreGroup = group;
       document.body.appendChild(moreMenu);
       installSessionMoreMenuAutoClose(row, moreMenu);
-    }
-    if (settings.sessionDelete) {
-      const deleteButton = document.createElement("button");
-      deleteButton.type = "button";
-      deleteButton.className = `${actionButtonClass} ${buttonClass}`;
-      deleteButton.dataset.codexDeleteVersion = codexDeleteVersion;
-      configureSvgActionButton(deleteButton, "删除", trashIconSvg());
-      const openDeleteConfirm = (event) => openDeleteConfirmForRow(row, deleteButton, ref, event);
-      installActionButtonEvents(row, deleteButton, openDeleteConfirm);
-      group.appendChild(deleteButton);
-      setTimeout(() => refreshActionButton(deleteButton, row, openDeleteConfirm), 0);
     }
     row.appendChild(group);
     syncActionGroupLayout(row, group);
