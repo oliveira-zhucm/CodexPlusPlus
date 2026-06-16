@@ -8,6 +8,9 @@
   const actionGroupClass = "codex-session-actions";
   const moreButtonClass = "codex-session-more-button";
   const moreMenuClass = "codex-session-more-menu";
+  const topSessionMenuItemClass = "codex-top-session-menu-item";
+  const topSessionMenuSeparatorClass = "codex-top-session-menu-separator";
+  const topSessionMenuFallbackClass = "codex-top-session-menu-fallback";
   const actionTooltipClass = "codex-session-action-tooltip";
   const timelineClass = "codex-conversation-timeline";
   const timelineTrackClass = "codex-conversation-timeline-track";
@@ -47,6 +50,7 @@
   const codexExportVersion = "1";
   const codexProjectMoveVersion = "1";
   const codexActionGroupVersion = "5";
+  const codexTopSessionMenuVersion = "1";
   const codexArchiveRowActionsVersion = "1";
   const codexArchiveDeleteAllVersion = "2";
   const codexConversationTimelineVersion = "2";
@@ -250,6 +254,37 @@
         outline: none;
       }
       .codex-session-more-menu-icon {
+        width: 16px;
+        text-align: center;
+      }
+      .${topSessionMenuSeparatorClass} {
+        height: 1px;
+        margin: 5px 6px;
+        background: rgba(148, 163, 184, .22);
+      }
+      .${topSessionMenuItemClass} {
+        width: 100%;
+        min-height: 30px;
+        box-sizing: border-box;
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        color: inherit;
+        cursor: default;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font: inherit;
+        padding: 6px 9px;
+        text-align: left;
+        white-space: nowrap;
+      }
+      .${topSessionMenuItemClass}:hover,
+      .${topSessionMenuItemClass}:focus-visible {
+        background: rgba(148, 163, 184, .14);
+        outline: none;
+      }
+      .codex-top-session-menu-icon {
         width: 16px;
         text-align: center;
       }
@@ -6681,10 +6716,16 @@ ${quoteMarkdownSelection(context.text)}
     return { sortMs: trustedSortMs || rowSortMs(row, ref), sortMsTrusted: !!trustedSortMs };
   }
 
+  function canShowProjectMoveProgressOnButton(button) {
+    return !!button && button.dataset?.codexTopSessionMenuAnchor !== "true";
+  }
+
   function finishProjectMove(row, button, ref, target, message) {
     releaseDeleteFocus(row, button);
-    button.disabled = false;
-    button.textContent = "移动";
+    if (canShowProjectMoveProgressOnButton(button)) {
+      button.disabled = false;
+      button.textContent = "移动";
+    }
     saveProjectMoveProjection(ref, target, target.sortMs || rowSortMs(row, ref, target));
     if (target.kind === "projectless") moveRowToChats(row, target);
     refreshAfterProjectMove();
@@ -6692,8 +6733,10 @@ ${quoteMarkdownSelection(context.text)}
   }
 
   async function applyProjectMove(row, button, ref, target) {
-    button.disabled = true;
-    button.textContent = "移动中";
+    if (canShowProjectMoveProgressOnButton(button)) {
+      button.disabled = true;
+      button.textContent = "移动中";
+    }
     try {
       if (target.kind === "projectless") {
         const result = await moveSessionToProjectless(ref);
@@ -6703,8 +6746,10 @@ ${quoteMarkdownSelection(context.text)}
         finishProjectMove(row, button, ref, { ...target, ...sortStateFromMoveResult(result, ref, row) }, `已移动到“${target.label}”：“${ref.title || ref.session_id}”`);
       }
     } catch (error) {
-      button.disabled = false;
-      button.textContent = "移动";
+      if (canShowProjectMoveProgressOnButton(button)) {
+        button.disabled = false;
+        button.textContent = "移动";
+      }
       showToast(`移动失败：${error?.message || error}`, null);
     }
   }
@@ -6950,6 +6995,210 @@ ${quoteMarkdownSelection(context.text)}
     return item;
   }
 
+  function activeSessionRow() {
+    const rows = sessionRows(true).filter((row) => row instanceof HTMLElement);
+    return rows.find((row) => row.getAttribute("data-app-action-sidebar-thread-active") === "true")
+      || rows.find((row) => {
+        const ref = sessionRefFromRow(row);
+        return ref.session_id && isCurrentSessionRow(row, ref);
+      })
+      || null;
+  }
+
+  function topSessionMenuActionRef() {
+    const row = activeSessionRow();
+    const ref = row ? sessionRefFromRow(row) : currentSessionRef();
+    return {
+      row,
+      ref: ref.session_id ? ref : { ...ref, session_id: locationThreadId() },
+    };
+  }
+
+  function topSessionMenuEnabled() {
+    const settings = codexPlusSettings();
+    return !!(settings.markdownExport || settings.projectMove);
+  }
+
+  function topSessionMenuVisibleElement(node) {
+    if (!(node instanceof HTMLElement) || !node.isConnected) return false;
+    const style = getComputedStyle(node);
+    if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
+    const rect = node.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
+
+  function isTopSessionMenuTrigger(button) {
+    if (!(button instanceof HTMLElement) || !topSessionMenuVisibleElement(button) || isExtensionUiNode(button)) return false;
+    const header = button.closest(selectors.appHeader) || button.closest("header") || button.closest(selectors.headerContextMenuSurface);
+    if (!header || button.closest("nav")) return false;
+    const rect = button.getBoundingClientRect();
+    if (rect.top > 96 || rect.left < 260) return false;
+    const text = (button.textContent || "").trim();
+    const label = [
+      button.getAttribute("aria-label"),
+      button.getAttribute("title"),
+      button.getAttribute("data-testid"),
+      button.dataset?.testid,
+    ].filter(Boolean).join(" ").toLowerCase();
+    return text === "…" || text === "..." || /more|menu|options|context|更多|操作/.test(label);
+  }
+
+  function topSessionMenuCandidates(anchor) {
+    const anchorRect = anchor?.getBoundingClientRect?.();
+    if (!anchorRect) return [];
+    const selectors = [
+      '[role="menu"]',
+      '[data-radix-popper-content-wrapper]',
+      '[data-state="open"]',
+      '[data-testid*="menu" i]',
+      '[class*="popover" i]',
+      '[class*="dropdown" i]',
+      '[class*="menu" i]',
+    ].join(", ");
+    return Array.from(document.querySelectorAll(selectors))
+      .filter((node) => node instanceof HTMLElement && topSessionMenuVisibleElement(node) && !isExtensionUiNode(node))
+      .filter((node) => {
+        const rect = node.getBoundingClientRect();
+        if (rect.width < 80 || rect.height < 28) return false;
+        if (rect.top < anchorRect.top - 12) return false;
+        if (rect.left > anchorRect.right + 260 || rect.right < anchorRect.left - 260) return false;
+        return node.querySelector("button, [role='menuitem'], a, [role='option']") || (node.textContent || "").trim();
+      })
+      .sort((left, right) => {
+        const leftRect = left.getBoundingClientRect();
+        const rightRect = right.getBoundingClientRect();
+        const leftDistance = Math.abs(leftRect.top - anchorRect.bottom) + Math.abs(leftRect.left - anchorRect.left);
+        const rightDistance = Math.abs(rightRect.top - anchorRect.bottom) + Math.abs(rightRect.left - anchorRect.left);
+        return leftDistance - rightDistance;
+      });
+  }
+
+  function topSessionMenuInsertionSurface(surface) {
+    return surface?.matches?.('[role="menu"]') ? surface : surface?.querySelector?.('[role="menu"]') || surface;
+  }
+
+  function closeTopSessionInjectedFallbackMenus() {
+    document.querySelectorAll(`.${topSessionMenuFallbackClass}`).forEach((node) => node.remove());
+  }
+
+  function createTopSessionMenuItem(label, icon, onActivate) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = topSessionMenuItemClass;
+    item.setAttribute("data-codex-top-session-menu-item", "true");
+    item.setAttribute("data-codex-top-session-menu-version", codexTopSessionMenuVersion);
+    item.innerHTML = `<span class="codex-top-session-menu-icon">${icon}</span><span>${label}</span>`;
+    item.addEventListener("click", onActivate, true);
+    return item;
+  }
+
+  function closeLikelyNativeMenu(item) {
+    const surface = item?.closest?.('[role="menu"], [data-radix-popper-content-wrapper], [data-state="open"]');
+    surface?.dispatchEvent?.(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  }
+
+  function handleTopSessionMenuAction(action, anchor, item, event) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation?.();
+    const { row, ref } = topSessionMenuActionRef();
+    if (!ref.session_id) {
+      showToast("未识别当前会话", null);
+      return;
+    }
+    closeTopSessionInjectedFallbackMenus();
+    closeLikelyNativeMenu(item);
+    if (action === "export") {
+      exportMarkdown(ref);
+      return;
+    }
+    if (action === "move") {
+      if (!row) {
+        showToast("移动失败：未找到当前会话行", null);
+        return;
+      }
+      anchor.dataset.codexTopSessionMenuAnchor = "true";
+      openProjectMoveMenuForRow(row, anchor, ref, event);
+    }
+  }
+
+  function appendTopSessionMenuItems(surface, anchor) {
+    if (!topSessionMenuEnabled()) return false;
+    const target = topSessionMenuInsertionSurface(surface);
+    if (!target || target.querySelector(`[data-codex-top-session-menu-version="${codexTopSessionMenuVersion}"]`)) return false;
+    const settings = codexPlusSettings();
+    const separator = document.createElement("div");
+    separator.className = topSessionMenuSeparatorClass;
+    separator.setAttribute("data-codex-top-session-menu-item", "true");
+    separator.setAttribute("data-codex-top-session-menu-version", codexTopSessionMenuVersion);
+    target.appendChild(separator);
+    if (settings.markdownExport) {
+      target.appendChild(createTopSessionMenuItem("导出 Markdown", "⇩", (event) => handleTopSessionMenuAction("export", anchor, event.currentTarget, event)));
+    }
+    if (settings.projectMove) {
+      target.appendChild(createTopSessionMenuItem("移动到项目", "↗", (event) => handleTopSessionMenuAction("move", anchor, event.currentTarget, event)));
+    }
+    return true;
+  }
+
+  function openTopSessionFallbackMenu(anchor) {
+    closeTopSessionInjectedFallbackMenus();
+    const menu = document.createElement("div");
+    menu.className = `${moreMenuClass} ${topSessionMenuFallbackClass}`;
+    menu.setAttribute("role", "menu");
+    menu.dataset.codexTopSessionMenuVersion = codexTopSessionMenuVersion;
+    menu.hidden = false;
+    const settings = codexPlusSettings();
+    if (settings.markdownExport) {
+      menu.appendChild(createTopSessionMenuItem("导出 Markdown", "⇩", (event) => handleTopSessionMenuAction("export", anchor, event.currentTarget, event)));
+    }
+    if (settings.projectMove) {
+      menu.appendChild(createTopSessionMenuItem("移动到项目", "↗", (event) => handleTopSessionMenuAction("move", anchor, event.currentTarget, event)));
+    }
+    document.body.appendChild(menu);
+    positionSessionMoreMenu(anchor, menu);
+    updateSessionMoreMenuDirection(anchor, menu);
+    const close = (event) => {
+      if (menu.contains(event.target) || anchor.contains(event.target)) return;
+      menu.remove();
+      document.removeEventListener("pointerdown", close, true);
+      document.removeEventListener("keydown", closeOnEscape, true);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key !== "Escape") return;
+      menu.remove();
+      document.removeEventListener("pointerdown", close, true);
+      document.removeEventListener("keydown", closeOnEscape, true);
+    };
+    setTimeout(() => {
+      document.addEventListener("pointerdown", close, true);
+      document.addEventListener("keydown", closeOnEscape, true);
+    }, 0);
+  }
+
+  function injectTopSessionMenuItems(anchor, allowFallback = false) {
+    if (!topSessionMenuEnabled() || !anchor?.isConnected) {
+      closeTopSessionInjectedFallbackMenus();
+      return;
+    }
+    const surface = topSessionMenuCandidates(anchor)[0];
+    if (surface && appendTopSessionMenuItems(surface, anchor)) return;
+    if (allowFallback) openTopSessionFallbackMenu(anchor);
+  }
+
+  function installTopSessionMenuActions() {
+    if (window.__codexTopSessionMenuActionsInstalled === codexTopSessionMenuVersion) return;
+    window.__codexTopSessionMenuActionsInstalled = codexTopSessionMenuVersion;
+    document.addEventListener("click", (event) => {
+      const target = event.target instanceof Element ? event.target : event.target?.parentElement;
+      const button = target?.closest?.("button, [role='button']");
+      if (!isTopSessionMenuTrigger(button)) return;
+      [40, 120, 260].forEach((delay, index, delays) => {
+        setTimeout(() => injectTopSessionMenuItems(button, index === delays.length - 1), delay);
+      });
+    }, true);
+  }
+
   function showActionButtonTooltip(button) {
     const label = button.dataset.codexActionLabel || button.getAttribute("aria-label") || "";
     if (!label) return;
@@ -7008,82 +7257,9 @@ ${quoteMarkdownSelection(context.text)}
   }
 
   function attachButton(row) {
-    const settings = codexPlusSettings();
-    if (!settings.markdownExport && !settings.projectMove) {
-      removeActionGroups(row);
-      row.dataset.codexDeleteRow = "false";
-      row.dataset.codexProjectMoveRow = "false";
-      return;
-    }
-    const existingGroup = actionGroupFromRow(row);
-    const existingDeleteButton = existingGroup?.querySelector(`.${buttonClass}`);
-    const existingMoreButton = existingGroup?.querySelector(`.${moreButtonClass}`);
-    const existingExportButton = existingGroup?.querySelector(`.${exportButtonClass}`);
-    const existingMoveButton = existingGroup?.querySelector(`.${projectMoveButtonClass}`);
-    const needsMoreMenu = settings.markdownExport || settings.projectMove;
-    const hasUnexpectedDelete = !!existingDeleteButton;
-    const hasUnexpectedMore = !needsMoreMenu && !!existingMoreButton;
-    const hasUnexpectedExport = !!existingExportButton;
-    const hasUnexpectedMove = !!existingMoveButton;
-    const missingMore = needsMoreMenu && !existingMoreButton;
-    const groupReady = existingGroup?.dataset.codexActionGroupVersion === codexActionGroupVersion;
-    if (groupReady && !hasUnexpectedDelete && !hasUnexpectedMore && !hasUnexpectedExport && !hasUnexpectedMove && !missingMore) {
-      syncActionGroupLayout(row, existingGroup);
-      return;
-    }
     removeActionGroups(row);
     row.dataset.codexDeleteRow = "false";
     row.dataset.codexProjectMoveRow = "false";
-    const ref = sessionRefFromRow(row);
-    if (!ref.session_id) return;
-    row.dataset.codexDeleteRow = "true";
-    row.dataset.codexProjectMoveRow = String(!!settings.projectMove);
-    const group = document.createElement("div");
-    group.className = actionGroupClass;
-    group.dataset.codexActionGroupVersion = codexActionGroupVersion;
-    if (settings.markdownExport || settings.projectMove) {
-      const moreButton = document.createElement("button");
-      moreButton.type = "button";
-      moreButton.className = `${actionButtonClass} ${moreButtonClass}`;
-      moreButton.setAttribute("aria-haspopup", "menu");
-      moreButton.setAttribute("aria-expanded", "false");
-      configureActionButton(moreButton, "更多操作", "…");
-      const moreMenu = document.createElement("div");
-      moreMenu.className = moreMenuClass;
-      moreMenu.setAttribute("role", "menu");
-      moreMenu.hidden = true;
-      if (settings.markdownExport) {
-        moreMenu.appendChild(createSessionMoreMenuItem("导出", "⇩", (event) => {
-          stopActionButtonEvent(row, moreButton, event);
-          closeSessionMoreMenus();
-          exportMarkdown(ref);
-        }));
-      }
-      if (settings.projectMove) {
-        moreMenu.appendChild(createSessionMoreMenuItem("移动", "↗", (event) => {
-          stopActionButtonEvent(row, moreButton, event);
-          closeSessionMoreMenus();
-          openProjectMoveMenuForRow(row, moreButton, ref, event);
-        }));
-      }
-      const openMoreMenu = (event) => {
-        stopActionButtonEvent(row, moreButton, event);
-        hideActionButtonTooltip();
-        toggleSessionMoreMenu(row, moreButton, moreMenu);
-        if (!moreMenu.hidden) {
-          positionSessionMoreMenu(moreButton, moreMenu);
-          updateSessionMoreMenuDirection(moreButton, moreMenu);
-        }
-      };
-      installMoreButtonEvents(row, moreButton, openMoreMenu);
-      group.appendChild(moreButton);
-      moreMenu.__codexSessionMoreRow = row;
-      moreMenu.__codexSessionMoreGroup = group;
-      document.body.appendChild(moreMenu);
-      installSessionMoreMenuAutoClose(row, moreMenu);
-    }
-    row.appendChild(group);
-    syncActionGroupLayout(row, group);
   }
 
   function tryAttachButton(row) {
@@ -7863,6 +8039,7 @@ ${quoteMarkdownSelection(context.text)}
     installStyle();
     installCodexServiceTierDispatcherPatch();
     installCodexPlusMenu();
+    installTopSessionMenuActions();
     scheduleBackendHeartbeat();
     installDeleteButtonEventDelegation();
     updateThreadScrollHandlers();
@@ -8509,7 +8686,7 @@ ${quoteMarkdownSelection(context.text)}
   }
 
   function isExtensionUiNode(node) {
-    return !!node?.closest?.(`.codex-delete-toast, .codex-delete-confirm-overlay, .codex-plus-modal-overlay, .${projectMoveOverlayClass}, .${timelineClass}, .codex-conversation-timeline, .${codexServiceTierBadgeClass}, .codex-zed-remote-button, .codex-zed-remote-toast, .codex-md-selection-toolbar, #codex-plus-menu`);
+    return !!node?.closest?.(`.codex-delete-toast, .codex-delete-confirm-overlay, .codex-plus-modal-overlay, .${moreMenuClass}, .${topSessionMenuFallbackClass}, .${projectMoveOverlayClass}, .${timelineClass}, .codex-conversation-timeline, .${codexServiceTierBadgeClass}, .codex-zed-remote-button, .codex-zed-remote-toast, .codex-md-selection-toolbar, #codex-plus-menu`);
   }
 
   function scanRelevantSelector() {
