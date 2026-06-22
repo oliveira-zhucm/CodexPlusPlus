@@ -5558,6 +5558,102 @@ ${quoteMarkdownSelection(context.text)}
     return verification.includes(String(text).trim().slice(0, 80));
   }
 
+  function reactFiberForElement(node) {
+    for (let element = node; element instanceof Element; element = element.parentElement) {
+      const key = Object.keys(element).find((name) => name.startsWith("__reactFiber$"));
+      if (key) return element[key];
+    }
+    return null;
+  }
+
+  function isCodexOfficialComposerScope(candidate) {
+    if (!candidate || typeof candidate !== "object") return false;
+    const value = candidate.value;
+    return typeof candidate.get === "function" &&
+      typeof candidate.set === "function" &&
+      typeof candidate.watch === "function" &&
+      candidate.chain instanceof Map &&
+      candidate.scope?.__scopeBrand === "ComposerScope" &&
+      value &&
+      typeof value === "object" &&
+      value.kind !== "new";
+  }
+
+  function findCodexOfficialComposerScopeInObject(root, seen, depth, budget) {
+    if (!root || typeof root !== "object" || seen.has(root) || depth < 0 || budget.count > 700) return null;
+    if (isCodexOfficialComposerScope(root)) return root;
+    if (typeof Node !== "undefined" && root instanceof Node) return null;
+    seen.add(root);
+    budget.count += 1;
+
+    if (root instanceof Map) {
+      let index = 0;
+      for (const [key, value] of root.entries()) {
+        const foundValue = findCodexOfficialComposerScopeInObject(value, seen, depth - 1, budget);
+        if (foundValue) return foundValue;
+        const foundKey = findCodexOfficialComposerScopeInObject(key, seen, depth - 1, budget);
+        if (foundKey) return foundKey;
+        index += 1;
+        if (index > 12) break;
+      }
+      return null;
+    }
+
+    const skip = new Set(["alternate", "child", "children", "dependencies", "elementType", "ownerDocument", "return", "sibling", "stateNode", "type"]);
+    const keys = Object.keys(root).slice(0, 30);
+    for (const key of keys) {
+      if (skip.has(key)) continue;
+      let value;
+      try {
+        value = root[key];
+      } catch (_) {
+        continue;
+      }
+      const found = findCodexOfficialComposerScopeInObject(value, seen, depth - 1, budget);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  function codexOfficialComposerScopeCandidateElements() {
+    const candidates = [];
+    const add = (node) => {
+      if (node instanceof HTMLElement && !isExtensionUiNode(node)) candidates.push(node);
+    };
+    add(composerWriterFindTarget());
+    document.querySelectorAll("[data-codex-composer], [data-thread-find-composer], .composer-footer").forEach(add);
+    return Array.from(new Set(candidates)).filter((node) => visibleElement(node) || node.querySelector?.("[data-codex-composer]"));
+  }
+
+  function findCodexOfficialComposerScope() {
+    for (const element of codexOfficialComposerScopeCandidateElements()) {
+      let fiber = reactFiberForElement(element);
+      for (let index = 0; fiber && index < 130; index += 1, fiber = fiber.return) {
+        const roots = [fiber.memoizedState, fiber.updateQueue, fiber.memoizedProps];
+        for (const root of roots) {
+          const budget = { count: 0 };
+          const seen = new WeakSet();
+          const scope = findCodexOfficialComposerScopeInObject(root, seen, 5, budget);
+          if (scope) return scope;
+        }
+      }
+    }
+    return null;
+  }
+
+  async function addMarkdownSelectionUsingOfficialSelectedText(context) {
+    const scope = findCodexOfficialComposerScope();
+    if (!scope) return false;
+    const module = await loadCodexAppModule("composer-view-state-");
+    if (typeof module?.n !== "function") return false;
+    module.n(scope, context.text);
+    try {
+      window.getSelection?.()?.removeAllRanges?.();
+    } catch (_) {}
+    composerWriterFindTarget()?.focus?.();
+    return true;
+  }
+
   async function copyTextToClipboard(text) {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
@@ -5626,6 +5722,18 @@ ${quoteMarkdownSelection(context.text)}
       showToast("Markdown 引用已复制", null);
       hideMarkdownSelectionToolbar();
       return;
+    }
+    if (action === "add") {
+      try {
+        if (await addMarkdownSelectionUsingOfficialSelectedText(context)) {
+          showToast("已添加为官方选中文本片段", null);
+          hideMarkdownSelectionToolbar();
+          return;
+        }
+      } catch (error) {
+        window.__codexMdSelectionOfficialAddFailures = window.__codexMdSelectionOfficialAddFailures || [];
+        window.__codexMdSelectionOfficialAddFailures.push(String(error?.stack || error));
+      }
     }
     const prompt = markdownReaderPrompt(context, action);
     if (composerWriterInsertText(prompt)) {

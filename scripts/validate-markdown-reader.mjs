@@ -11,6 +11,8 @@ const requiredInjectMarkers = [
   "function installWorkspaceMarkdownReaderStyle()",
   "function findWorkspaceMarkdownSurfaces()",
   "function installMarkdownSelectionToolbar()",
+  "function findCodexOfficialComposerScope()",
+  "composer-view-state-",
   "function composerWriterInsertText(",
   "data-codex-md-reader",
   "codex-md-selection-toolbar",
